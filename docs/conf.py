@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 #
-# raspberry_pi_camera_bot documentation build configuration file, created by
-# sphinx-quickstart on Mon May 12 16:35:52 2014.
+# Raspberry Pi Camera Bot documentation build configuration file, created by
+# sphinx-quickstart on Mon May 12 17:21:43 2014.
 #
 # This file is execfile()d with the current directory set to its containing dir.
 #
@@ -164,7 +164,7 @@ html_static_path = ['_static']
 #html_file_suffix = None
 
 # Output file base name for HTML help builder.
-htmlhelp_basename = 'raspberry_pi_camera_botdoc'
+htmlhelp_basename = 'RaspberryPiCameraBotdoc'
 
 
 # -- Options for LaTeX output --------------------------------------------------
@@ -183,8 +183,8 @@ latex_elements = {
 # Grouping the document tree into LaTeX files. List of tuples
 # (source start file, target name, title, author, documentclass [howto/manual]).
 latex_documents = [
-  ('index', 'raspberry_pi_camera_bot.tex', u'raspberry\\_pi\\_camera\\_bot Documentation',
-   u'Alan Broun', 'manual'),
+  ('index', 'RaspberryPiCameraBot.tex', u'Raspberry Pi Camera Bot Documentation',
+   u'Dawn Robotics Ltd', 'manual'),
 ]
 
 # The name of an image file (relative to this directory) to place at the top of
@@ -213,8 +213,8 @@ latex_documents = [
 # One entry per manual page. List of tuples
 # (source start file, name, description, authors, manual section).
 man_pages = [
-    ('index', 'raspberry_pi_camera_bot', u'raspberry_pi_camera_bot Documentation',
-     [u'Alan Broun'], 1)
+    ('index', 'raspberrypicamerabot', u'Raspberry Pi Camera Bot Documentation',
+     [u'Dawn Robotics Ltd'], 1)
 ]
 
 # If true, show URL addresses after external links.
@@ -227,8 +227,8 @@ man_pages = [
 # (source start file, target name, title, author,
 #  dir menu entry, description, category)
 texinfo_documents = [
-  ('index', 'raspberry_pi_camera_bot', u'raspberry_pi_camera_bot Documentation',
-   u'Alan Broun', 'raspberry_pi_camera_bot', 'One line description of project.',
+  ('index', 'RaspberryPiCameraBot', u'Raspberry Pi Camera Bot Documentation',
+   u'Dawn Robotics Ltd', 'RaspberryPiCameraBot', 'One line description of project.',
    'Miscellaneous'),
 ]
 
