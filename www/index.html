@@ -120,7 +120,8 @@
                         socket.send( "Move " + pos.x + " " + pos.y ); } },
                  updateIntervalMS: 500,
                  updateEvent: function(pos) { 
-                    if ( socket.readyState == SockJS.OPEN ) {
+                    if ( socket.readyState == SockJS.OPEN
+                        && ( 0.0 != pos.x || 0.0 != pos.y ) ) {
                         socket.send( "Move " + pos.x + " " + pos.y ); } }
              });
              $('#pan_tilt_stick').joystick({
@@ -140,7 +141,8 @@
                     } },
                  updateIntervalMS: 500,
                  updateEvent: function(pos) { 
-                    if ( socket.readyState == SockJS.OPEN ) {
+                    if ( socket.readyState == SockJS.OPEN 
+                        && ( 0.0 != pos.x || 0.0 != pos.y ) ) {
                         socket.send( "PanTilt " + pos.x + " " + pos.y ); } }
              });
              $('#motor_stick').joystick( 'value', 0.0, 0.0 );
