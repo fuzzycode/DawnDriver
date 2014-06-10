@@ -116,7 +116,7 @@
                 
                 if ( "usePresetMotorSpeeds" in configData )
                 {
-                    $( "#usePresetMotorSpeeds" ).prop( "checked", true );
+                    $( "#usePresetMotorSpeeds" ).prop( "checked", configData[ "usePresetMotorSpeeds" ] );
                     onUsePresetMotorSpeedsChange();
                 }
                 
