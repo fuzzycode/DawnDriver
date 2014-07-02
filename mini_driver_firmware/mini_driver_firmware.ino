@@ -30,7 +30,7 @@ OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE. */
 
 //------------------------------------------------------------------------------
 const uint8_t VERSION_MAJOR = 0;
-const uint8_t VERSION_MINOR = 29;
+const uint8_t VERSION_MINOR = 31;
 const uint16_t FIRMWARE_ID = 0xACED;
 
 const uint16_t MAX_MSG_SIZE = 16;
@@ -56,6 +56,11 @@ const int RIGHT_MOTOR_PWM_PIN = 10;
 const int PAN_SERVO_PIN = 4;
 const int TILT_SERVO_PIN = 3;
 const int BATTERY_VOLTAGE_PIN = A7;
+
+const int MOTOR_PWM_80HZ_OCR2 = 62;     // Fast PWM used for fast motor speeds
+const int MOTOR_PWM_20HZ_OCR2 = 255;    // Slow PWM used for slow motor speeds
+const int MOTOR_PWM_80HZ_DUTY_CYCLE = 100;
+const int MOTOR_PWM_20HZ_DUTY_CYCLE = 20;
                                             
 const unsigned long BATTERY_VOLTAGE_READ_MS = 10;
                                             
@@ -142,12 +147,16 @@ uint8_t calculateCheckSum( const uint8_t* pData, uint8_t msgSize );
 //------------------------------------------------------------------------------
 void setup()
 {
-    // Set up timer 2 to generate an interrupt 62500 times a second
+    // Set up timer 2 in CTC mode with a prescaler of clk/32, so with the chip 
+    // running at 16MHz this gives 500,000 clock ticks per second. By varying
+    // the value of OCR2 we will generate an interrupt from roughly 8000 times a
+    // second to 2000 times a second which gives a motor PWM frequency of 80Hz
+    // to 20Hz. Lower PWM frequencies give choppier movement
     noInterrupts();
-    TCCR2 = 2; //1;        // Activate time, no prescaling of timer source
+    TCCR2 = (1 << 3) | 3;      // Activate timer in CTC mode with a prescaler of clk/32
+    OCR2 = 0xFF;
     
-    TIMSK |= (1 << TOIE2);    // Activate timer 2 overflow interrupt
-    
+    TIMSK |= (1 << OCIE2);     // Activate timer 2 output compare interrupt
     
     interrupts();
     
@@ -177,6 +186,28 @@ void loop()
         gRightMotorDutyCycle = 0;
         gLeftMotorDirection = eMD_Forwards;
         gRightMotorDirection = eMD_Forwards;
+    }
+    
+    // Update the frequency of the motor PWM
+    uint8_t lowestDutyCycle = ( gLeftMotorDutyCycle < gRightMotorDutyCycle 
+        ? gLeftMotorDutyCycle : gRightMotorDutyCycle );
+    
+    if ( lowestDutyCycle <= MOTOR_PWM_20HZ_DUTY_CYCLE )
+    {
+        OCR2 = MOTOR_PWM_20HZ_OCR2;
+    }
+    else if ( lowestDutyCycle >= MOTOR_PWM_80HZ_DUTY_CYCLE )
+    {
+        OCR2 = MOTOR_PWM_80HZ_OCR2;
+    }
+    else
+    {
+        long int maxOcrChange = MOTOR_PWM_80HZ_OCR2 - MOTOR_PWM_20HZ_OCR2;
+        
+        int ocrDiff = (int)(maxOcrChange
+            *(long int)((int)lowestDutyCycle - (int)MOTOR_PWM_20HZ_DUTY_CYCLE)
+            /(long int)((int)MOTOR_PWM_80HZ_DUTY_CYCLE - (int)MOTOR_PWM_20HZ_DUTY_CYCLE));
+        OCR2 = (uint8_t)((int)MOTOR_PWM_20HZ_OCR2 + ocrDiff);
     }
     
     // Update the motor directions and servo angles
@@ -409,7 +440,7 @@ uint8_t calculateCheckSum( const uint8_t* pData, uint8_t msgSize )
 }
 
 //------------------------------------------------------------------------------
-ISR( TIMER2_OVF_vect )        // Interrupt service routine for motor PWM
+ISR( TIMER2_COMP_vect )        // Interrupt service routine for motor PWM
 {
     gCurMotorWaveTick++;
     
