@@ -49,4 +49,5 @@ if connected:
     miniDriver.setOutputs( -50, -50, 90, 90 )
     time.sleep( 1.0 )
 
+miniDriver.disconnect()
 del miniDriver

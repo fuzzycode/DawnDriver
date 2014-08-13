@@ -1,3 +1,13 @@
 All code copyright Dawn Robotics Ltd is licensed under the BSD license. See the LICENSE file for details.
 
 Of the included JavaScript libraries, jQuery and SockJS are licensed under the MIT license. Our joystick class jquery.joystick.js is a modified version of https://github.com/mifi/jquery-joystick. This project doesn't have a license but obviously all derived projects should link back and provide acknowledgement.
+
+The folder mini_driver_firmware contains the encoder library which is made up from the following files
+
+Encoder.h
+Encoder.cpp
+utility_direct_pin_read.h
+utility_interrupt_config.h
+utility_interrupt_pins.h
+
+The Encoder library was written by Paul Stoffregen of PJRC.COM, it can be used pretty much without restriction, but the copyright notice and licence in Encoder.h must be included with any copies or modifications.

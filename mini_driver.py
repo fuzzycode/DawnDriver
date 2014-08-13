@@ -33,6 +33,7 @@ import serial
 import threading
 import time
 import Queue
+import struct
 
 import ino_uploader
 
@@ -44,16 +45,23 @@ COMMAND_ID_GET_FIRMWARE_INFO = 1
 COMMAND_ID_SET_OUTPUTS = 2
 COMMAND_ID_SET_PAN_SERVO_LIMITS = 3
 COMMAND_ID_SET_TILT_SERVO_LIMITS = 4
+COMMAND_ID_SET_SENSOR_CONFIGURATION = 5
 
 RESPONSE_ID_FIRMWARE_INFO = 1
 RESPONSE_ID_INVALID_COMMAND = 2
 RESPONSE_ID_INVALID_CHECK_SUM = 3
 RESPONSE_ID_BATTERY_READING = 4
+RESPONSE_ID_SENSOR_READINGS = 5
 
 ADC_REF_VOLTAGE = 5.0
 BATTERY_VOLTAGE_SCALE = 2.0   # Battery voltage is divided by 2 before it is 
                               # passed to the ADC so we must undo that
 
+PIN_FUNC_INACTIVE = "inactive"
+PIN_FUNC_DIGITAL_READ = "digital"
+PIN_FUNC_ANALOG_READ = "analog"
+PIN_FUNC_ULTRASONIC_READ = "ultrasonic"
+                              
 #---------------------------------------------------------------------------------------------------
 class FirmwareInfo:
     
@@ -79,6 +87,105 @@ class FirmwareInfo:
     def __ne__( self, other ): 
         return self.__dict__ != other.__dict__
 
+#---------------------------------------------------------------------------------------------------
+class SensorConfiguration:
+    
+    #-----------------------------------------------------------------------------------------------
+    def __init__( self, configD12=PIN_FUNC_ULTRASONIC_READ, 
+        configD13=PIN_FUNC_INACTIVE, 
+        configA0=PIN_FUNC_ANALOG_READ, configA1=PIN_FUNC_ANALOG_READ,
+        configA2=PIN_FUNC_ANALOG_READ, configA3=PIN_FUNC_ANALOG_READ,
+        configA4=PIN_FUNC_ANALOG_READ, configA5=PIN_FUNC_ANALOG_READ ):
+            
+        self.configD12 = configD12
+        self.configD13 = configD13
+        self.configA0 = configA0
+        self.configA1 = configA1
+        self.configA2 = configA2
+        self.configA3 = configA3
+        self.configA4 = configA4
+        self.configA5 = configA5
+        
+    #-----------------------------------------------------------------------------------------------
+    def setFromByte( self, sensorConfigByte ):
+        
+        sensorConfigByte = ord( sensorConfigByte )
+        
+        if sensorConfigByte & (1 << 0):
+            self.configD12 = PIN_FUNC_DIGITAL_READ
+        else:
+            self.configD12 = PIN_FUNC_ULTRASONIC_READ
+            
+        if sensorConfigByte & (1 << 1):
+            self.configD13 = PIN_FUNC_DIGITAL_READ
+        else:
+            self.configD13 = PIN_FUNC_INACTIVE
+            
+        if sensorConfigByte & (1 << 2):
+            self.configA0 = PIN_FUNC_DIGITAL_READ
+        else:
+            self.configA0 = PIN_FUNC_ANALOG_READ
+            
+        if sensorConfigByte & (1 << 3):
+            self.configA1 = PIN_FUNC_DIGITAL_READ
+        else:
+            self.configA1 = PIN_FUNC_ANALOG_READ
+            
+        if sensorConfigByte & (1 << 4):
+            self.configA2 = PIN_FUNC_DIGITAL_READ
+        else:
+            self.configA2 = PIN_FUNC_ANALOG_READ
+            
+        if sensorConfigByte & (1 << 5):
+            self.configA3 = PIN_FUNC_DIGITAL_READ
+        else:
+            self.configA3 = PIN_FUNC_ANALOG_READ
+            
+        if sensorConfigByte & (1 << 6):
+            self.configA4 = PIN_FUNC_DIGITAL_READ
+        else:
+            self.configA4 = PIN_FUNC_ANALOG_READ
+            
+        if sensorConfigByte & (1 << 7):
+            self.configA5 = PIN_FUNC_DIGITAL_READ
+        else:
+            self.configA5 = PIN_FUNC_ANALOG_READ
+            
+    #-----------------------------------------------------------------------------------------------
+    def getAsByte( self ):
+        
+        sensorConfigByte = 0
+        
+        if self.configD12 == PIN_FUNC_DIGITAL_READ:
+            sensorConfigByte |= (1 << 0)
+        if self.configD13 == PIN_FUNC_DIGITAL_READ:
+            sensorConfigByte |= (1 << 1)
+        if self.configA0 == PIN_FUNC_DIGITAL_READ:
+            sensorConfigByte |= (1 << 2)
+        if self.configA1 == PIN_FUNC_DIGITAL_READ:
+            sensorConfigByte |= (1 << 3)
+        if self.configA2 == PIN_FUNC_DIGITAL_READ:
+            sensorConfigByte |= (1 << 4)
+        if self.configA3 == PIN_FUNC_DIGITAL_READ:
+            sensorConfigByte |= (1 << 5)
+        if self.configA4 == PIN_FUNC_DIGITAL_READ:
+            sensorConfigByte |= (1 << 6)
+        if self.configA5 == PIN_FUNC_DIGITAL_READ:
+            sensorConfigByte |= (1 << 7)
+        
+        return chr( sensorConfigByte )
+        
+    #-----------------------------------------------------------------------------------------------
+    def __str__( self ):
+        
+        return "configD12: {0}\n".format( self.configD12 ) \
+            + "configD13: {0}\n".format( self.configD13 ) \
+            + "configA0: {0}\n".format( self.configA0 ) \
+            + "configA1: {0}\n".format( self.configA1 ) \
+            + "configA2: {0}\n".format( self.configA2 ) \
+            + "configA3: {0}\n".format( self.configA3 ) \
+            + "configA4: {0}\n".format( self.configA4 ) \
+            + "configA5: {0}".format( self.configA5 )
         
 #---------------------------------------------------------------------------------------------------
 def calculateCheckSum( msgBuffer ):
@@ -198,7 +305,7 @@ class SerialReadProcess( threading.Thread ):
         elif messageId == RESPONSE_ID_INVALID_CHECK_SUM:
             
             logging.info( "Sent message had invalid checksum" )
-            self.responseQueue.put( "Invalid" )
+            self.responseQueue.put( "Invalid Checksum" )
         
         elif messageId == RESPONSE_ID_BATTERY_READING:
             
@@ -213,6 +320,41 @@ class SerialReadProcess( threading.Thread ):
                 batteryVoltage = BATTERY_VOLTAGE_SCALE * ADC_REF_VOLTAGE * float( batteryReading )/1023.0
         
                 self.statusQueue.put( ( "b", batteryVoltage ) )
+        
+        elif messageId == RESPONSE_ID_SENSOR_READINGS:
+            
+            dataBytes = msgBuffer[ 4:-1 ]
+            if len( dataBytes ) < 26:
+                
+                logging.warning( "Got message with invalid number of bytes" )
+                self.responseQueue.put( "Invalid" )
+                
+            else:
+                           
+                sensorConfiguration = SensorConfiguration()
+                sensorConfiguration.setFromByte( dataBytes[ 0 ] )
+                
+                batteryReading = ord( dataBytes[ 1 ] ) << 8 | ord( dataBytes[ 2 ] )
+                batteryVoltage = BATTERY_VOLTAGE_SCALE * ADC_REF_VOLTAGE * float( batteryReading )/1023.0
+        
+                digitalReadings = ord( dataBytes[ 3 ] )
+                analogReadings = [
+                    ord( dataBytes[ 4 ] ) << 8 | ord( dataBytes[ 5 ] ),
+                    ord( dataBytes[ 6 ] ) << 8 | ord( dataBytes[ 7 ] ),
+                    ord( dataBytes[ 8 ] ) << 8 | ord( dataBytes[ 9 ] ),
+                    ord( dataBytes[ 10 ] ) << 8 | ord( dataBytes[ 11 ] ),
+                    ord( dataBytes[ 12 ] ) << 8 | ord( dataBytes[ 13 ] ),
+                    ord( dataBytes[ 14 ] ) << 8 | ord( dataBytes[ 15 ] )
+                ]
+                ultrasonicReading = ord( dataBytes[ 16 ] ) << 8 | ord( dataBytes[ 17 ] )
+                
+                leftEncoderReading = struct.unpack( ">i", dataBytes[ 18:22 ] )[0]
+                rightEncoderReading = struct.unpack( ">i", dataBytes[ 22:26 ] )[0]
+
+                self.statusQueue.put( ( "s", sensorConfiguration,
+                    batteryVoltage, digitalReadings, 
+                    analogReadings, ultrasonicReading,
+                    leftEncoderReading, rightEncoderReading ) )
         
         else:
             
@@ -235,7 +377,13 @@ class Connection():
             self.serialPort, self.responseQueue, self.statusQueue )
         self.serialReadProcess.start()
         
+        self.sensorConfiguration = SensorConfiguration()
         self.batteryVoltage = 0.0
+        self.digitalReadings = 0
+        self.analogReadings = []
+        self.ultrasonicReading = 0
+        self.leftEncoderReading = 0
+        self.rightEncoderReading = 0
         
         time.sleep( self.STARTUP_DELAY )
         
@@ -260,33 +408,93 @@ class Connection():
             
             if statusData[ 0 ] == "b":
                 self.batteryVoltage = statusData[ 1 ]
+                
+            if statusData[ 0 ] == "s":
+                self.sensorConfiguration = statusData[ 1 ]
+                self.batteryVoltage = statusData[ 2 ]
+                self.digitalReadings = statusData[ 3 ]
+                self.analogReadings = statusData[ 4 ]
+                self.ultrasonicReading = statusData[ 5 ]
+                self.leftEncoderReading = statusData[ 6 ]
+                self.rightEncoderReading = statusData[ 7 ]
     
     #-----------------------------------------------------------------------------------------------
-    def getFirmwareInfo( self ):
+    def sendMessageAskingForFirmwareInfo( self ):
         
         msgBuffer = MESSAGE_MARKER + chr( COMMAND_ID_GET_FIRMWARE_INFO ) + chr( 5 ) + chr( 0 )
         msgBuffer = msgBuffer[ :-1 ] + chr( calculateCheckSum( msgBuffer ) )
         
         self.serialPort.write( msgBuffer )
+    
+    #-----------------------------------------------------------------------------------------------
+    def getFirmwareInfo( self ):
         
-        #for b in msgBuffer:
-        #    print "Sent", ord( b )
+        # Clear out the response queue
+        while not self.responseQueue.empty():
+            responseData = self.responseQueue.get_nowait()
         
-        response = None
-        try:
-            response = self.responseQueue.get( timeout=5.0 )
-        except Exception:
-            pass
+        self.sendMessageAskingForFirmwareInfo()
         
-        if not isinstance( response, FirmwareInfo ):
-            response = FirmwareInfo()
+        # Wait for a response
+        firmwareInfo = FirmwareInfo()
+        startTime = time.time()
+        readFirmwareInfo = False
+        while not readFirmwareInfo and time.time() - startTime < 5.0:
+            
+            while not self.responseQueue.empty():
+                response = self.responseQueue.get_nowait()
+                
+                if isinstance( response, FirmwareInfo ):
+                    firmwareInfo = response
+                elif response == "Invalid Checksum":
+                    
+                    # Request failed resend
+                    self.sendMessageAskingForFirmwareInfo()
+                
+            self.update()
+
+        return firmwareInfo
+    
+    #-----------------------------------------------------------------------------------------------
+    def setSensorConfiguration( self, sensorConfiguration ):
         
-        return response   
+        msgBuffer = MESSAGE_MARKER + chr( COMMAND_ID_SET_SENSOR_CONFIGURATION) \
+            + chr( 6 ) \
+            + sensorConfiguration.getAsByte() \
+            + chr( 0 )
+        msgBuffer = msgBuffer[ :-1 ] + chr( calculateCheckSum( msgBuffer ) )
+
+        self.serialPort.write( msgBuffer )
+    
+    #-----------------------------------------------------------------------------------------------
+    def getSensorConfiguration( self ):
+        
+        return self.sensorConfiguration
     
     #-----------------------------------------------------------------------------------------------
     def getBatteryVoltage( self ):
         
         return self.batteryVoltage
+        
+    #-----------------------------------------------------------------------------------------------
+    def getDigitalReadings( self ):
+        
+        return self.digitalReadings
+        
+    #-----------------------------------------------------------------------------------------------
+    def getAnalogReadings( self ):
+        
+        return self.analogReadings
+        
+    #-----------------------------------------------------------------------------------------------
+    def getUltrasonicReading( self ):
+        
+        return self.ultrasonicReading
+        
+    #-----------------------------------------------------------------------------------------------
+    def getEncoderReadings( self ):
+        
+        return self.leftEncoderReading, self.rightEncoderReading
     
     #-----------------------------------------------------------------------------------------------
     def setOutputs( self, leftMotorSpeed, rightMotorSpeed, panAngle, tiltAngle ):
@@ -323,7 +531,7 @@ class Connection():
         msgBuffer = msgBuffer[ :-1 ] + chr( calculateCheckSum( msgBuffer ) )
 
         self.serialPort.write( msgBuffer )
-
+        
 #---------------------------------------------------------------------------------------------------
 class PresetMotorSpeeds:
     
@@ -357,6 +565,8 @@ class MiniDriver():
     def __init__( self ):
         
         self.scriptPath = os.path.dirname( __file__ )
+        if self.scriptPath == "":
+            self.scriptPath = "./"
         self.connection = None
     
     #-----------------------------------------------------------------------------------------------
@@ -365,7 +575,7 @@ class MiniDriver():
         self.disconnect()
     
     #-----------------------------------------------------------------------------------------------
-    def connect( self ):
+    def connect( self, uploadIfInitialConnectionFails=True ):
         
         """Establishes a connection with the Mini Driver and confirms that it contains
            the correct version of the firmware. If not then the routine builds the
@@ -381,20 +591,22 @@ class MiniDriver():
             self.connection.close()
             self.connection = None
             
-            logging.info( "Unable to connect to correct firmware, uploading..." )
-            uploadResult = ino_uploader.upload( self.__getFirmwareDir(), 
-                serialPortName=self.SERIAL_PORT_NAME, boardModel=self.BOARD_MODEL )
+            if uploadIfInitialConnectionFails:
             
-            if uploadResult == True:
+                logging.info( "Unable to connect to correct firmware, uploading..." )
+                uploadResult = ino_uploader.upload( self.__getFirmwareDir(), 
+                    serialPortName=self.SERIAL_PORT_NAME, boardModel=self.BOARD_MODEL )
                 
-                self.connection = Connection( self.SERIAL_PORT_NAME, self.BAUD_RATE )
-                firmwareInfo = self.connection.getFirmwareInfo()
-                logging.info( "Read " + str( firmwareInfo ) )
+                if uploadResult == True:
+                    
+                    self.connection = Connection( self.SERIAL_PORT_NAME, self.BAUD_RATE )
+                    firmwareInfo = self.connection.getFirmwareInfo()
+                    logging.info( "Read " + str( firmwareInfo ) )
+                    
+                    if firmwareInfo != self.__getExpectedFirmwareInfo():
                 
-                if firmwareInfo != self.__getExpectedFirmwareInfo():
-            
-                    self.connection.close()
-                    self.connection = None
+                        self.connection.close()
+                        self.connection = None
             
         return self.isConnected()
     
@@ -427,12 +639,68 @@ class MiniDriver():
         return result
     
     #-----------------------------------------------------------------------------------------------
+    def setSensorConfiguration( self, sensorConfiguration ):
+        
+        if self.connection != None:
+            self.connection.setSensorConfiguration( sensorConfiguration )
+    
+    #-----------------------------------------------------------------------------------------------
+    def getSensorConfiguration( self ):
+        
+        result = SensorConfiguration()
+        
+        if self.connection != None:
+            result = self.connection.getSensorConfiguration()
+    
+        return result
+    
+    #-----------------------------------------------------------------------------------------------
     def getBatteryVoltage( self ):
         
         result = 0.0
         
         if self.connection != None:
             result = self.connection.getBatteryVoltage()
+    
+        return result
+        
+    #-----------------------------------------------------------------------------------------------
+    def getDigitalReadings( self ):
+        
+        result = 0
+        
+        if self.connection != None:
+            result = self.connection.getDigitalReadings()
+    
+        return result
+        
+    #-----------------------------------------------------------------------------------------------
+    def getAnalogReadings( self ):
+        
+        result = []
+        
+        if self.connection != None:
+            result = self.connection.getAnalogReadings()
+    
+        return result
+        
+    #-----------------------------------------------------------------------------------------------
+    def getUltrasonicReading( self ):
+        
+        result = 0
+        
+        if self.connection != None:
+            result = self.connection.getUltrasonicReading()
+    
+        return result
+        
+    #-----------------------------------------------------------------------------------------------
+    def getEncoderReadings( self ):
+        
+        result = 0, 0
+        
+        if self.connection != None:
+            result = self.connection.getEncoderReadings()
     
         return result
     
