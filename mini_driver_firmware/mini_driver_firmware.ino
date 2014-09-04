@@ -31,7 +31,7 @@ OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE. */
 
 //------------------------------------------------------------------------------
 const uint8_t VERSION_MAJOR = 0;
-const uint8_t VERSION_MINOR = 32;
+const uint8_t VERSION_MINOR = 36;
 const uint16_t FIRMWARE_ID = 0xACED;
 
 const uint16_t MAX_MSG_SIZE = 32;
@@ -152,6 +152,8 @@ unsigned long gLastUltrasonicReadTimeMS = 0;
 volatile uint8_t gCurMotorWaveTick = 0;
 
 int gLastUltrasonicReading = -1;
+unsigned long gUltrasonicPulseStartTimeUS = 0;
+bool gbTakingUltrasonicSensorReading = false;
 
 // This byte determines which pins are used as digital inputs
 // A bit set to 1 indicates that the pin is used as a digital input
@@ -265,6 +267,53 @@ void loop()
     gPanServo.writeMicroseconds( gPanServoLimits.convertAngleToPWM( gPanServoAngle ) );
     gTiltServo.writeMicroseconds( gTiltServoLimits.convertAngleToPWM( gTiltServoAngle ) );
     
+    // Periodically kick off an ultrasonic sensor read
+    if ( curTime - gLastUltrasonicReadTimeMS >= SENSOR_READ_INTERVAL_MS
+       && !gbTakingUltrasonicSensorReading )
+    {
+        // Start to measure the range
+        pinMode( ULTRASONIC_PIN, OUTPUT );
+        digitalWrite( ULTRASONIC_PIN, LOW );
+        delayMicroseconds( 2 );
+        digitalWrite( ULTRASONIC_PIN, HIGH );
+        delayMicroseconds( 5 );
+        digitalWrite( ULTRASONIC_PIN, LOW );
+    
+        unsigned long startWaitTimeUS = micros();
+    
+        // Wait for the response pulse to start
+        pinMode( ULTRASONIC_PIN, INPUT );
+        bool bPulseStarted = false; 
+        while ( !bPulseStarted
+           && micros() - startWaitTimeUS < 500 )
+        {
+            bPulseStarted = digitalRead( ULTRASONIC_PIN ) == HIGH;
+        }
+        
+        if ( bPulseStarted )
+        {
+            gUltrasonicPulseStartTimeUS = micros();
+            gbTakingUltrasonicSensorReading = true;
+        }
+        else
+        {
+            // Looks like no sensor is attached. Wait a bit before trying again
+            gLastUltrasonicReadTimeMS = curTime;
+        }
+    }
+    
+    // Check the status of an ongoing ultrasonic read
+    if ( gbTakingUltrasonicSensorReading
+        && digitalRead( ULTRASONIC_PIN ) == LOW )
+    {
+        // Pulse has ended
+        unsigned long durationUS = micros() - gUltrasonicPulseStartTimeUS;
+        
+        gLastUltrasonicReading = durationUS/ULTRASONIC_US_PER_CM;;
+        gLastUltrasonicReadTimeMS = curTime;
+        gbTakingUltrasonicSensorReading = false;
+    }
+    
     // Periodically read from the sensors and send the readings back
     if ( curTime - gLastSensorReadTimeMS >= SENSOR_READ_INTERVAL_MS )
     {
@@ -282,11 +331,7 @@ void loop()
         }
         else
         {
-            if ( curTime - gLastUltrasonicReadTimeMS >= SENSOR_READ_INTERVAL_MS )
-            {
-                gLastUltrasonicReading = measureDistanceUltrasonic( ULTRASONIC_PIN );
-                gLastUltrasonicReadTimeMS = curTime;
-            }
+            // Ultrasonic reads are being carried out on this pin
         }
         
         if ( gSensorConfiguration & (1 << 1) )
@@ -315,23 +360,6 @@ void loop()
         
         gLastSensorReadTimeMS = curTime;
     }
-}
-
-//------------------------------------------------------------------------------
-int measureDistanceUltrasonic( int pin )
-{
-    // Send control pulse
-    pinMode( pin, OUTPUT );
-    digitalWrite( pin, LOW );
-    delayMicroseconds( 2 );
-    digitalWrite( pin, HIGH );
-    delayMicroseconds( 5 );
-    digitalWrite( pin, LOW );
-    pinMode( pin, INPUT );
-    
-    long durationUS = pulseIn( ULTRASONIC_PIN, HIGH, MAX_ULTRASONIC_TIMEOUT_US );
-    
-    return durationUS/ULTRASONIC_US_PER_CM;
 }
 
 //------------------------------------------------------------------------------
