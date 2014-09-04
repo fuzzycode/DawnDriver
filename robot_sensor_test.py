@@ -58,7 +58,9 @@ if connected:
         configA2=mini_driver.PIN_FUNC_ANALOG_READ, 
         configA3=mini_driver.PIN_FUNC_DIGITAL_READ,
         configA4=mini_driver.PIN_FUNC_ANALOG_READ, 
-        configA5=mini_driver.PIN_FUNC_ANALOG_READ )
+        configA5=mini_driver.PIN_FUNC_ANALOG_READ,
+        leftEncoderType=mini_driver.ENCODER_TYPE_QUADRATURE, 
+        rightEncoderType=mini_driver.ENCODER_TYPE_QUADRATURE )
     
     try:
         while True:
@@ -67,18 +69,21 @@ if connected:
             
             miniDriver.update()
             
+            # Print out the sensor readings
+            print "Sensor timestamp:", miniDriver.getDigitalReadings().timestamp
+            
             receivedSensorConfiguration = miniDriver.getSensorConfiguration()
             print "Sensor configuration ="
             print receivedSensorConfiguration
             
-            print "Digital Readings:", byteToString( miniDriver.getDigitalReadings() )
+            print "Digital Readings:", byteToString( miniDriver.getDigitalReadings().data )
             print "Analog Readings:"
-            print miniDriver.getAnalogReadings()
-            print "Ultrasonic:", miniDriver.getUltrasonicReading()
-            print "Encoders:", miniDriver.getEncoderReadings()
+            print miniDriver.getAnalogReadings().data
+            print "Ultrasonic:", miniDriver.getUltrasonicReading().data
+            print "Encoders:", miniDriver.getEncodersReading().data
             print ""
             
-            time.sleep( 0.01 )
+            time.sleep( 0.1 )
     
     except KeyboardInterrupt:
         pass    # Catch Ctrl+C

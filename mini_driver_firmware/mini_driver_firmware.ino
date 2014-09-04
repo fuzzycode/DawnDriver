@@ -31,7 +31,7 @@ OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE. */
 
 //------------------------------------------------------------------------------
 const uint8_t VERSION_MAJOR = 0;
-const uint8_t VERSION_MINOR = 36;
+const uint8_t VERSION_MINOR = 38;
 const uint16_t FIRMWARE_ID = 0xACED;
 
 const uint16_t MAX_MSG_SIZE = 32;
@@ -65,6 +65,9 @@ const int LEFT_ENCODER_PIN_2 = 4;
 const int RIGHT_ENCODER_PIN_1 = 3;
 const int RIGHT_ENCODER_PIN_2 = 5;
 
+const uint8_t RENC_SINGLE_BITMASK = 0x02;
+const uint8_t LENC_SINGLE_BITMASK = 0x01;
+
 const int ULTRASONIC_PIN = 12;
 
 const int MOTOR_PWM_80HZ_OCR2 = 62;     // Fast PWM used for fast motor speeds
@@ -74,7 +77,8 @@ const int MOTOR_PWM_20HZ_DUTY_CYCLE = 20;
                                             
 const uint32_t SENSOR_READ_INTERVAL_MS = 10;
 const uint32_t ULTRASONIC_READ_INTERVAL_MS = 500;
-                      
+
+const uint32_t NO_ULTRASONIC_SENSOR_PRESENT = 1000;  // Value returned if it looks like no sensor is attached
 const uint32_t MAX_ULTRASONIC_RANGE_CM = 400;
 const uint32_t ULTRASONIC_US_PER_CM = 58;
 const uint32_t MAX_ULTRASONIC_TIMEOUT_US = MAX_ULTRASONIC_RANGE_CM*ULTRASONIC_US_PER_CM;
@@ -151,11 +155,11 @@ unsigned long gLastUltrasonicReadTimeMS = 0;
 
 volatile uint8_t gCurMotorWaveTick = 0;
 
-int gLastUltrasonicReading = -1;
+int gLastUltrasonicReadingCM = NO_ULTRASONIC_SENSOR_PRESENT;
 unsigned long gUltrasonicPulseStartTimeUS = 0;
 bool gbTakingUltrasonicSensorReading = false;
 
-// This byte determines which pins are used as digital inputs
+// This configuration byte determines which pins are used as digital inputs
 // A bit set to 1 indicates that the pin is used as a digital input
 // A bit set to 0 indicates that the pin is used for its alternative function if there is one
 // The alternative function for the analog pins is an analogRead. The alternative function for
@@ -167,7 +171,21 @@ bool gbTakingUltrasonicSensorReading = false;
 // bit      7                                    0
 //
 // This bit order is also used when returning the digital readings in sendSensorReadingsMessage
-uint8_t gSensorConfiguration = 0;    // By default no pins are configured as digital inputs
+uint8_t gSensorConfigurationA = 0;    // By default no pins are configured as digital inputs
+
+// This configuration byte determines whether single output or quadrature encoders are used.
+// The bits are interpreted as follows
+//
+// bit      R | R | R | R | R | R | RENC_SINGLE | LENC_SINGLE
+//
+// Bits marked 'R' are reserved and should be set to 0
+//
+// If RENC_SINGLE is set to 1 then the right encoder is single output. If RENC_SINGLE is set
+// to 0 then the right encoder is a quadrature encoder
+//
+// If LENC_SINGLE is set to 1 then the left encoder is single output. If LENC_SINGLE is set
+// to 0 then the left encoder is a quadrature encoder
+uint8_t gSensorConfigurationB = 0;    // By default both encoders are quadrature encoders
 
 //------------------------------------------------------------------------------
 int measureDistanceUltrasonic( int pin );
@@ -179,7 +197,7 @@ void sendFirmwareInfoResponse();
 void sendInvalidCommandResponse();
 void sendInvalidChecksumResponse();
 void sendSensorReadingsMessage( int batteryReading, uint8_t digitalReadings, 
-    int analogReadings[ 6 ], int gLastUltrasonicReading,
+    int analogReadings[ 6 ], int gLastUltrasonicReadingCM,
     int32_t leftEncoderReading, int32_t rightEncoderReading );
 uint8_t calculateCheckSum( const uint8_t* pData, uint8_t msgSize );
 
@@ -260,10 +278,13 @@ void loop()
         OCR2 = (uint8_t)((int)MOTOR_PWM_20HZ_OCR2 + ocrDiff);
     }
     
-    // Update the motor directions and servo angles
+    // Update the motor directions
     digitalWrite( LEFT_MOTOR_DIR_PIN, ( eMD_Forwards == gLeftMotorDirection ? HIGH : LOW ) );
     digitalWrite( RIGHT_MOTOR_DIR_PIN, ( eMD_Forwards == gRightMotorDirection ? HIGH : LOW ) );
+    gLeftEncoder.setGoingForward( eMD_Forwards == gLeftMotorDirection );
+    gRightEncoder.setGoingForward( eMD_Forwards == gRightMotorDirection );
     
+    // Update the servo angles
     gPanServo.writeMicroseconds( gPanServoLimits.convertAngleToPWM( gPanServoAngle ) );
     gTiltServo.writeMicroseconds( gTiltServoLimits.convertAngleToPWM( gTiltServoAngle ) );
     
@@ -298,6 +319,7 @@ void loop()
         else
         {
             // Looks like no sensor is attached. Wait a bit before trying again
+            gLastUltrasonicReadingCM = NO_ULTRASONIC_SENSOR_PRESENT;
             gLastUltrasonicReadTimeMS = curTime;
         }
     }
@@ -309,7 +331,12 @@ void loop()
         // Pulse has ended
         unsigned long durationUS = micros() - gUltrasonicPulseStartTimeUS;
         
-        gLastUltrasonicReading = durationUS/ULTRASONIC_US_PER_CM;;
+        gLastUltrasonicReadingCM = durationUS/ULTRASONIC_US_PER_CM;
+        if ( gLastUltrasonicReadingCM > MAX_ULTRASONIC_RANGE_CM )
+        {
+            gLastUltrasonicReadingCM = MAX_ULTRASONIC_RANGE_CM;
+        }
+        
         gLastUltrasonicReadTimeMS = curTime;
         gbTakingUltrasonicSensorReading = false;
     }
@@ -325,7 +352,7 @@ void loop()
         
         // Check each of the 8 sensor pins in turn. Either use them for a digital read, or
         // for their alternative function.
-        if ( gSensorConfiguration & (1 << 0) )
+        if ( gSensorConfigurationA & (1 << 0) )
         {
             digitalReadings |= (( digitalRead( 12 ) == HIGH ? 1 : 0 ) << 0);
         }
@@ -334,7 +361,7 @@ void loop()
             // Ultrasonic reads are being carried out on this pin
         }
         
-        if ( gSensorConfiguration & (1 << 1) )
+        if ( gSensorConfigurationA & (1 << 1) )
         {
             digitalReadings |= (( digitalRead( 13 ) == HIGH ? 1 : 0 ) << 1);
         }
@@ -345,7 +372,7 @@ void loop()
         
         for ( int i = 0; i < 6; i++ )
         {
-            if ( gSensorConfiguration & (1 << (2 + i)) )
+            if ( gSensorConfigurationA & (1 << (2 + i)) )
             {
                 digitalReadings |= (( digitalRead( A0 + i ) == HIGH ? 1 : 0 ) << (2 + i));
             }
@@ -356,7 +383,7 @@ void loop()
         }
         
         sendSensorReadingsMessage( batteryReading, digitalReadings, 
-            analogReadings, gLastUltrasonicReading, gLeftEncoder.read(), gRightEncoder.read() );
+            analogReadings, gLastUltrasonicReadingCM, gLeftEncoder.read(), gRightEncoder.read() );
         
         gLastSensorReadTimeMS = curTime;
     }
@@ -492,9 +519,13 @@ void processMessage()
         }
         case COMMAND_ID_SET_SENSOR_CONFIGURATION:
         {
-            if ( getMessageSize() == 6 )
+            if ( getMessageSize() == 7 )
             {
-                gSensorConfiguration = gMsgBuffer[ 4 ];
+                gSensorConfigurationA = gMsgBuffer[ 4 ];
+                gSensorConfigurationB = gMsgBuffer[ 5 ];
+                
+                gLeftEncoder.setSingleOutput( gSensorConfigurationB & LENC_SINGLE_BITMASK );
+                gRightEncoder.setSingleOutput( gSensorConfigurationB & RENC_SINGLE_BITMASK );
                 
                 bCommandHandled = true;
             }
@@ -557,13 +588,13 @@ void sendInvalidCheckSumResponse()
 
 //------------------------------------------------------------------------------
 void sendSensorReadingsMessage( int batteryReading, uint8_t digitalReadings, 
-    int analogReadings[ 6 ], int gLastUltrasonicReading,
+    int analogReadings[ 6 ], int gLastUltrasonicReadingCM,
     int32_t leftEncoderReading, int32_t rightEncoderReading )
 {    
     uint8_t msgData[] = 
     {
         0xFF, 0xFF, RESPONSE_ID_SENSOR_READINGS, 0, // Header
-        gSensorConfiguration,
+        gSensorConfigurationA, gSensorConfigurationB,
         (batteryReading >> 8) & 0xFF, batteryReading & 0xFF,
         digitalReadings,
         (analogReadings[ 0 ] >> 8) & 0xFF, analogReadings[ 0 ] & 0xFF,
@@ -572,7 +603,7 @@ void sendSensorReadingsMessage( int batteryReading, uint8_t digitalReadings,
         (analogReadings[ 3 ] >> 8) & 0xFF, analogReadings[ 3 ] & 0xFF,
         (analogReadings[ 4 ] >> 8) & 0xFF, analogReadings[ 4 ] & 0xFF,
         (analogReadings[ 5 ] >> 8) & 0xFF, analogReadings[ 5 ] & 0xFF,
-        (gLastUltrasonicReading >> 8) & 0xFF, gLastUltrasonicReading & 0xFF,
+        (gLastUltrasonicReadingCM >> 8) & 0xFF, gLastUltrasonicReadingCM & 0xFF,
         (leftEncoderReading >> 24) & 0xFF, (leftEncoderReading >> 16) & 0xFF, (leftEncoderReading >> 8) & 0xFF, leftEncoderReading & 0xFF,
         (rightEncoderReading >> 24) & 0xFF, (rightEncoderReading >> 16) & 0xFF, (rightEncoderReading >> 8) & 0xFF, rightEncoderReading & 0xFF,
         0

@@ -88,12 +88,27 @@ class RobotController:
         presetMaxAbsMotorSpeed, presetMaxAbsTurnSpeed = self.miniDriver.getPresetMotorSpeeds()
         
         statusDict = {
-            "batteryVoltage" : self.miniDriver.getBatteryVoltage(),
+            "batteryVoltage" : self.miniDriver.getBatteryVoltageReading().data,
             "presetMaxAbsMotorSpeed" : presetMaxAbsMotorSpeed,
-            "presetMaxAbsTurnSpeed" : presetMaxAbsTurnSpeed
+            "presetMaxAbsTurnSpeed" : presetMaxAbsTurnSpeed,
+            "miniDriverSensorConfig" : self.miniDriver.getSensorConfiguration(),
+            "sensors" : self.getSensorDict()
         }
         
         return statusDict
+        
+    #-----------------------------------------------------------------------------------------------
+    def getSensorDict( self ):
+                
+        sensorDict = {
+            "batteryVoltage" : self.miniDriver.getBatteryVoltageReading(),
+            "digital" : self.miniDriver.getDigitalReadings(),
+            "analog" : self.miniDriver.getAnalogReadings(),
+            "ultrasonic" : self.miniDriver.getUltrasonicReading(),
+            "encoders" : self.miniDriver.getEncodersReading(),
+        }
+        
+        return sensorDict
     
     #-----------------------------------------------------------------------------------------------
     def normaliseJoystickData( self, joystickX, joystickY ):

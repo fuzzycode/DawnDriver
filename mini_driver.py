@@ -36,6 +36,7 @@ import Queue
 import struct
 
 import ino_uploader
+import sensors
 
 MESSAGE_MARKER = chr( 0xFF ) + chr( 0xFF )
 COMMAND_ID_READ_DB_ENTRY = 1
@@ -53,6 +54,11 @@ RESPONSE_ID_INVALID_CHECK_SUM = 3
 RESPONSE_ID_BATTERY_READING = 4
 RESPONSE_ID_SENSOR_READINGS = 5
 
+NUM_ANALOG_PINS = 6
+
+NO_ULTRASONIC_SENSOR_PRESENT = 1000  # Value returned if it looks like no ultrasonic sensor is attached
+MAX_ULTRASONIC_RANGE_CM = 400
+
 ADC_REF_VOLTAGE = 5.0
 BATTERY_VOLTAGE_SCALE = 2.0   # Battery voltage is divided by 2 before it is 
                               # passed to the ADC so we must undo that
@@ -61,6 +67,8 @@ PIN_FUNC_INACTIVE = "inactive"
 PIN_FUNC_DIGITAL_READ = "digital"
 PIN_FUNC_ANALOG_READ = "analog"
 PIN_FUNC_ULTRASONIC_READ = "ultrasonic"
+ENCODER_TYPE_SINGLE_OUTPUT = "single_output"
+ENCODER_TYPE_QUADRATURE = "quadrature"
                               
 #---------------------------------------------------------------------------------------------------
 class FirmwareInfo:
@@ -95,7 +103,8 @@ class SensorConfiguration:
         configD13=PIN_FUNC_INACTIVE, 
         configA0=PIN_FUNC_ANALOG_READ, configA1=PIN_FUNC_ANALOG_READ,
         configA2=PIN_FUNC_ANALOG_READ, configA3=PIN_FUNC_ANALOG_READ,
-        configA4=PIN_FUNC_ANALOG_READ, configA5=PIN_FUNC_ANALOG_READ ):
+        configA4=PIN_FUNC_ANALOG_READ, configA5=PIN_FUNC_ANALOG_READ,
+        leftEncoderType=ENCODER_TYPE_QUADRATURE, rightEncoderType=ENCODER_TYPE_QUADRATURE ):
             
         self.configD12 = configD12
         self.configD13 = configD13
@@ -105,75 +114,96 @@ class SensorConfiguration:
         self.configA3 = configA3
         self.configA4 = configA4
         self.configA5 = configA5
+        self.leftEncoderType = leftEncoderType
+        self.rightEncoderType = rightEncoderType
         
     #-----------------------------------------------------------------------------------------------
-    def setFromByte( self, sensorConfigByte ):
+    def setFromBytes( self, configByteA, configByteB ):
         
-        sensorConfigByte = ord( sensorConfigByte )
+        configByteA = ord( configByteA )
+        configByteB = ord( configByteB )
         
-        if sensorConfigByte & (1 << 0):
+        # Decode configByteA
+        if configByteA & (1 << 0):
             self.configD12 = PIN_FUNC_DIGITAL_READ
         else:
             self.configD12 = PIN_FUNC_ULTRASONIC_READ
             
-        if sensorConfigByte & (1 << 1):
+        if configByteA & (1 << 1):
             self.configD13 = PIN_FUNC_DIGITAL_READ
         else:
             self.configD13 = PIN_FUNC_INACTIVE
             
-        if sensorConfigByte & (1 << 2):
+        if configByteA & (1 << 2):
             self.configA0 = PIN_FUNC_DIGITAL_READ
         else:
             self.configA0 = PIN_FUNC_ANALOG_READ
             
-        if sensorConfigByte & (1 << 3):
+        if configByteA & (1 << 3):
             self.configA1 = PIN_FUNC_DIGITAL_READ
         else:
             self.configA1 = PIN_FUNC_ANALOG_READ
             
-        if sensorConfigByte & (1 << 4):
+        if configByteA & (1 << 4):
             self.configA2 = PIN_FUNC_DIGITAL_READ
         else:
             self.configA2 = PIN_FUNC_ANALOG_READ
             
-        if sensorConfigByte & (1 << 5):
+        if configByteA & (1 << 5):
             self.configA3 = PIN_FUNC_DIGITAL_READ
         else:
             self.configA3 = PIN_FUNC_ANALOG_READ
             
-        if sensorConfigByte & (1 << 6):
+        if configByteA & (1 << 6):
             self.configA4 = PIN_FUNC_DIGITAL_READ
         else:
             self.configA4 = PIN_FUNC_ANALOG_READ
             
-        if sensorConfigByte & (1 << 7):
+        if configByteA & (1 << 7):
             self.configA5 = PIN_FUNC_DIGITAL_READ
         else:
             self.configA5 = PIN_FUNC_ANALOG_READ
             
+        # Decode configByteB
+        if configByteB & (1 << 0):
+            self.leftEncoderType = ENCODER_TYPE_SINGLE_OUTPUT
+        else:
+            self.leftEncoderType = ENCODER_TYPE_QUADRATURE
+            
+        if configByteB & (1 << 1):
+            self.rightEncoderType = ENCODER_TYPE_SINGLE_OUTPUT
+        else:
+            self.rightEncoderType = ENCODER_TYPE_QUADRATURE
+            
     #-----------------------------------------------------------------------------------------------
-    def getAsByte( self ):
+    def getAsBytes( self ):
         
-        sensorConfigByte = 0
+        configByteA = 0
         
         if self.configD12 == PIN_FUNC_DIGITAL_READ:
-            sensorConfigByte |= (1 << 0)
+            configByteA |= (1 << 0)
         if self.configD13 == PIN_FUNC_DIGITAL_READ:
-            sensorConfigByte |= (1 << 1)
+            configByteA |= (1 << 1)
         if self.configA0 == PIN_FUNC_DIGITAL_READ:
-            sensorConfigByte |= (1 << 2)
+            configByteA |= (1 << 2)
         if self.configA1 == PIN_FUNC_DIGITAL_READ:
-            sensorConfigByte |= (1 << 3)
+            configByteA |= (1 << 3)
         if self.configA2 == PIN_FUNC_DIGITAL_READ:
-            sensorConfigByte |= (1 << 4)
+            configByteA |= (1 << 4)
         if self.configA3 == PIN_FUNC_DIGITAL_READ:
-            sensorConfigByte |= (1 << 5)
+            configByteA |= (1 << 5)
         if self.configA4 == PIN_FUNC_DIGITAL_READ:
-            sensorConfigByte |= (1 << 6)
+            configByteA |= (1 << 6)
         if self.configA5 == PIN_FUNC_DIGITAL_READ:
-            sensorConfigByte |= (1 << 7)
+            configByteA |= (1 << 7)
         
-        return chr( sensorConfigByte )
+        configByteB = 0
+        if self.leftEncoderType == ENCODER_TYPE_SINGLE_OUTPUT:
+            configByteB |= (1 << 0)
+        if self.rightEncoderType == ENCODER_TYPE_SINGLE_OUTPUT:
+            configByteB |= (1 << 1)
+        
+        return chr( configByteA ), chr( configByteB )
         
     #-----------------------------------------------------------------------------------------------
     def __str__( self ):
@@ -185,7 +215,9 @@ class SensorConfiguration:
             + "configA2: {0}\n".format( self.configA2 ) \
             + "configA3: {0}\n".format( self.configA3 ) \
             + "configA4: {0}\n".format( self.configA4 ) \
-            + "configA5: {0}".format( self.configA5 )
+            + "configA5: {0}\n".format( self.configA5 ) \
+            + "leftEncoderType: {0}\n".format( self.leftEncoderType ) \
+            + "rightEncoderType: {0}".format( self.rightEncoderType )
         
 #---------------------------------------------------------------------------------------------------
 def calculateCheckSum( msgBuffer ):
@@ -316,42 +348,52 @@ class SerialReadProcess( threading.Thread ):
                 self.responseQueue.put( "Invalid" )
                 
             else:
-                batteryReading = ord( dataBytes[ 0 ] ) << 8 | ord( dataBytes[ 1 ] )
-                batteryVoltage = BATTERY_VOLTAGE_SCALE * ADC_REF_VOLTAGE * float( batteryReading )/1023.0
-        
-                self.statusQueue.put( ( "b", batteryVoltage ) )
+                
+                # The RESPONSE_ID_BATTERY_READING is no longer used so we just discard it.
+                # The mini driver firmware should now use RESPONSE_ID_SENSOR_READINGS instead.
+                pass
         
         elif messageId == RESPONSE_ID_SENSOR_READINGS:
             
             dataBytes = msgBuffer[ 4:-1 ]
-            if len( dataBytes ) < 26:
+            if len( dataBytes ) < 27:
                 
                 logging.warning( "Got message with invalid number of bytes" )
                 self.responseQueue.put( "Invalid" )
                 
             else:
-                           
-                sensorConfiguration = SensorConfiguration()
-                sensorConfiguration.setFromByte( dataBytes[ 0 ] )
                 
-                batteryReading = ord( dataBytes[ 1 ] ) << 8 | ord( dataBytes[ 2 ] )
+                # Unpack the sensor message
+                sensorConfiguration = SensorConfiguration()
+                sensorConfiguration.setFromBytes( dataBytes[ 0 ], dataBytes[ 1 ] )
+                
+                batteryReading = ord( dataBytes[ 2 ] ) << 8 | ord( dataBytes[ 3 ] )
                 batteryVoltage = BATTERY_VOLTAGE_SCALE * ADC_REF_VOLTAGE * float( batteryReading )/1023.0
         
-                digitalReadings = ord( dataBytes[ 3 ] )
+                digitalReadings = ord( dataBytes[ 4 ] )
                 analogReadings = [
-                    ord( dataBytes[ 4 ] ) << 8 | ord( dataBytes[ 5 ] ),
-                    ord( dataBytes[ 6 ] ) << 8 | ord( dataBytes[ 7 ] ),
-                    ord( dataBytes[ 8 ] ) << 8 | ord( dataBytes[ 9 ] ),
-                    ord( dataBytes[ 10 ] ) << 8 | ord( dataBytes[ 11 ] ),
-                    ord( dataBytes[ 12 ] ) << 8 | ord( dataBytes[ 13 ] ),
-                    ord( dataBytes[ 14 ] ) << 8 | ord( dataBytes[ 15 ] )
+                    ord( dataBytes[ 5 ] ) << 8 | ord( dataBytes[ 6 ] ),
+                    ord( dataBytes[ 7 ] ) << 8 | ord( dataBytes[ 8 ] ),
+                    ord( dataBytes[ 9 ] ) << 8 | ord( dataBytes[ 10 ] ),
+                    ord( dataBytes[ 11 ] ) << 8 | ord( dataBytes[ 12 ] ),
+                    ord( dataBytes[ 13 ] ) << 8 | ord( dataBytes[ 14 ] ),
+                    ord( dataBytes[ 15 ] ) << 8 | ord( dataBytes[ 16 ] )
                 ]
-                ultrasonicReading = ord( dataBytes[ 16 ] ) << 8 | ord( dataBytes[ 17 ] )
+                ultrasonicReading = ord( dataBytes[ 17 ] ) << 8 | ord( dataBytes[ 18 ] )
                 
-                leftEncoderReading = struct.unpack( ">i", dataBytes[ 18:22 ] )[0]
-                rightEncoderReading = struct.unpack( ">i", dataBytes[ 22:26 ] )[0]
+                leftEncoderReading = struct.unpack( ">i", dataBytes[ 19:23 ] )[0]
+                rightEncoderReading = struct.unpack( ">i", dataBytes[ 23:27 ] )[0]
 
-                self.statusQueue.put( ( "s", sensorConfiguration,
+                # Timestamp the sensor reading with the current time
+                # TODO: This timestamp should be reasonably accurate as it is assumed that the delay introduced
+                # by transmitting the sensor readings from the Mini Driver to the Pi is small. However, the
+                # timestamp will be less accurate for the Ultrasonic sensor which is sampled at just 2HZ (compared
+                # to 100Hz for the other sensors). At some point the mini driver firmware should be updated
+                # to send the delay since the ultrasonic sensor was last read.
+                sensorReadingTimestamp = time.time()
+                
+                self.statusQueue.put( ( "s", 
+                    sensorReadingTimestamp, sensorConfiguration,
                     batteryVoltage, digitalReadings, 
                     analogReadings, ultrasonicReading,
                     leftEncoderReading, rightEncoderReading ) )
@@ -378,12 +420,11 @@ class Connection():
         self.serialReadProcess.start()
         
         self.sensorConfiguration = SensorConfiguration()
-        self.batteryVoltage = 0.0
-        self.digitalReadings = 0
-        self.analogReadings = []
-        self.ultrasonicReading = 0
-        self.leftEncoderReading = 0
-        self.rightEncoderReading = 0
+        self.batteryVoltageReading = sensors.SensorReading( 0.0 )
+        self.digitalReadings = sensors.SensorReading( 0 )
+        self.analogReadings = sensors.SensorReading( [0] * NUM_ANALOG_PINS )
+        self.ultrasonicReading = sensors.SensorReading( 0 )
+        self.encodersReading = sensors.SensorReading( ( 0, 0 ) )
         
         time.sleep( self.STARTUP_DELAY )
         
@@ -406,17 +447,15 @@ class Connection():
         while not self.statusQueue.empty():
             statusData = self.statusQueue.get_nowait()
             
-            if statusData[ 0 ] == "b":
-                self.batteryVoltage = statusData[ 1 ]
-                
             if statusData[ 0 ] == "s":
-                self.sensorConfiguration = statusData[ 1 ]
-                self.batteryVoltage = statusData[ 2 ]
-                self.digitalReadings = statusData[ 3 ]
-                self.analogReadings = statusData[ 4 ]
-                self.ultrasonicReading = statusData[ 5 ]
-                self.leftEncoderReading = statusData[ 6 ]
-                self.rightEncoderReading = statusData[ 7 ]
+                
+                sensorReadingTimestamp = statusData[ 1 ]
+                self.sensorConfiguration = statusData[ 2 ]
+                self.batteryVoltageReading = sensors.SensorReading( statusData[ 3 ], sensorReadingTimestamp )
+                self.digitalReadings = sensors.SensorReading( statusData[ 4 ], sensorReadingTimestamp )
+                self.analogReadings = sensors.SensorReading( statusData[ 5 ], sensorReadingTimestamp )
+                self.ultrasonicReading = sensors.SensorReading( statusData[ 6 ], sensorReadingTimestamp )
+                self.encodersReading = sensors.SensorReading( ( statusData[ 7 ], statusData[ 8 ] ), sensorReadingTimestamp )
     
     #-----------------------------------------------------------------------------------------------
     def sendMessageAskingForFirmwareInfo( self ):
@@ -458,9 +497,11 @@ class Connection():
     #-----------------------------------------------------------------------------------------------
     def setSensorConfiguration( self, sensorConfiguration ):
         
+        sensorConfigByteA, sensorConfigByteB = sensorConfiguration.getAsBytes()
+        
         msgBuffer = MESSAGE_MARKER + chr( COMMAND_ID_SET_SENSOR_CONFIGURATION) \
-            + chr( 6 ) \
-            + sensorConfiguration.getAsByte() \
+            + chr( 7 ) \
+            + sensorConfigByteA + sensorConfigByteB \
             + chr( 0 )
         msgBuffer = msgBuffer[ :-1 ] + chr( calculateCheckSum( msgBuffer ) )
 
@@ -472,9 +513,9 @@ class Connection():
         return self.sensorConfiguration
     
     #-----------------------------------------------------------------------------------------------
-    def getBatteryVoltage( self ):
+    def getBatteryVoltageReading( self ):
         
-        return self.batteryVoltage
+        return self.batteryVoltageReading
         
     #-----------------------------------------------------------------------------------------------
     def getDigitalReadings( self ):
@@ -492,9 +533,9 @@ class Connection():
         return self.ultrasonicReading
         
     #-----------------------------------------------------------------------------------------------
-    def getEncoderReadings( self ):
+    def getEncodersReading( self ):
         
-        return self.leftEncoderReading, self.rightEncoderReading
+        return self.encodersReading
     
     #-----------------------------------------------------------------------------------------------
     def setOutputs( self, leftMotorSpeed, rightMotorSpeed, panAngle, tiltAngle ):
@@ -647,6 +688,9 @@ class MiniDriver():
     #-----------------------------------------------------------------------------------------------
     def getSensorConfiguration( self ):
         
+        """:return: The current SensorConfiguration of the Mini Driver 
+           :rtype: SensorConfiguration"""
+        
         result = SensorConfiguration()
         
         if self.connection != None:
@@ -655,19 +699,32 @@ class MiniDriver():
         return result
     
     #-----------------------------------------------------------------------------------------------
-    def getBatteryVoltage( self ):
+    def getBatteryVoltageReading( self ):
         
-        result = 0.0
+        """:return: A :py:class:`SensorReading` containing the most recent battery voltage read 
+                    from the Mini Driver as a float
+           :rtype: :py:class:`SensorReading`"""
+        
+        result = sensors.SensorReading( 0.0 )
         
         if self.connection != None:
-            result = self.connection.getBatteryVoltage()
+            result = self.connection.getBatteryVoltageReading()
     
         return result
         
     #-----------------------------------------------------------------------------------------------
     def getDigitalReadings( self ):
         
-        result = 0
+        """:return: A :py:class:`SensorReading` containing the most recent set of digital readings 
+                    read from the Mini Driver. The digital readings are returned as a byte with the 
+                    bits corresponding to the digital readings from the following pins
+                    
+                    pin     A5 | A4 | A3 | A2 | A1 | A0 | D13 | D12
+                    bit      7                                    0
+                    
+           :rtype: :py:class:`SensorReading`"""
+        
+        result = sensors.SensorReading( 0 )
         
         if self.connection != None:
             result = self.connection.getDigitalReadings()
@@ -677,7 +734,12 @@ class MiniDriver():
     #-----------------------------------------------------------------------------------------------
     def getAnalogReadings( self ):
         
-        result = []
+        """:return: A :py:class:`SensorReading` containing the most recent set of analog readings 
+                    read from the Mini Driver. There are 6 analog pins that can be read on the Mini 
+                    Driver and so the :py:class:`SensorReading` contains a list of 6 floats.
+           :rtype: :py:class:`SensorReading`"""
+        
+        result = sensors.SensorReading( [0] * NUM_ANALOG_PINS )
         
         if self.connection != None:
             result = self.connection.getAnalogReadings()
@@ -687,7 +749,14 @@ class MiniDriver():
     #-----------------------------------------------------------------------------------------------
     def getUltrasonicReading( self ):
         
-        result = 0
+        """:return: A :py:class:`SensorReading` containing the most recent ultrasonic distance 
+                    reading from the Mini Driver. The distance is in centimetres and the maximum
+                    range is MAX_ULTRASONIC_RANGE_CM. If it looks as if no ultrasonic sensor is 
+                    attached then NO_ULTRASONIC_SENSOR_PRESENT will be set as the distance.
+                    
+           :rtype: :py:class:`SensorReading`"""
+        
+        result = sensors.SensorReading( 0 )
         
         if self.connection != None:
             result = self.connection.getUltrasonicReading()
@@ -695,12 +764,17 @@ class MiniDriver():
         return result
         
     #-----------------------------------------------------------------------------------------------
-    def getEncoderReadings( self ):
+    def getEncodersReading( self ):
         
-        result = 0, 0
+        """:return: A :py:class:`SensorReading` containing the most recent reading from the 
+                    Mini Driver encoders.
+                    
+           :rtype: :py:class:`SensorReading`"""
+        
+        result = sensors.SensorReading( (0, 0) )
         
         if self.connection != None:
-            result = self.connection.getEncoderReadings()
+            result = self.connection.getEncodersReading()
     
         return result
     

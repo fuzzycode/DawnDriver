@@ -2,6 +2,8 @@
  * http://www.pjrc.com/teensy/td_libs_Encoder.html
  * Copyright (c) 2011,2013 PJRC.COM, LLC - Paul Stoffregen <paul@pjrc.com>
  *
+ * Version 1.1d - This is a modified version by Dawn Robotics Ltd to support
+ *                single output encoders (non-quadrature).
  * Version 1.1 - expand to support boards with up to 60 interrupts
  * Version 1.0 - initial release
  * 
@@ -50,8 +52,6 @@
 #define ENCODER_ARGLIST_SIZE 0
 #endif
 
-
-
 // All the data needed by interrupts is consolidated into this ugly struct
 // to facilitate assembly language optimizing of the speed critical update.
 // The assembly code uses auto-incrementing addressing modes, so the struct
@@ -63,6 +63,8 @@ typedef struct {
 	IO_REG_TYPE            pin2_bitmask;
 	uint8_t                state;
 	int32_t                position;
+    bool                   is_single_output;     
+    bool                   going_forward;
 } Encoder_internal_state_t;
 
 class Encoder
@@ -98,7 +100,16 @@ public:
 		//update_finishup();  // to force linker to include the code (does not work)
 	}
 
-
+	// Sets whether the encoder has just a single output (non-quadrature)
+    inline void setSingleOutput( bool is_single_output ) {
+        encoder.is_single_output = is_single_output;
+    }
+    
+    // Sets the motor direction. This is only used for single output encoders
+    inline void setGoingForward( bool going_forward ) {
+        encoder.going_forward = going_forward;
+    }
+	
 #ifdef ENCODER_USE_INTERRUPTS
 	inline int32_t read() {
 		if (interrupts_in_use < 2) {
@@ -182,7 +193,22 @@ public:
 
 private:
 	static void update(Encoder_internal_state_t *arg) {
+     
+    if ( arg->is_single_output )
+    {
+        uint8_t p1val = DIRECT_PIN_READ(arg->pin1_register, arg->pin1_bitmask);
+        
+        if ( arg->state != p1val )
+        {
+            arg->position += ( arg->going_forward ? 1 : -1 );
+            arg->state = p1val;
+        }
+    }
+    else
+    {
+     
 #if defined(__AVR__)
+    
 		// The compiler believes this is just 1 line of code, so
 		// it will inline this function into each interrupt
 		// handler.  That's a tiny bit faster, but grows the code.
@@ -266,28 +292,30 @@ private:
 			"st	-X, r22"		"\n\t"
 		"L%=end:"				"\n"
 		: : "x" (arg) : "r22", "r23", "r24", "r25", "r30", "r31");
+        
 #else
-		uint8_t p1val = DIRECT_PIN_READ(arg->pin1_register, arg->pin1_bitmask);
-		uint8_t p2val = DIRECT_PIN_READ(arg->pin2_register, arg->pin2_bitmask);
-		uint8_t state = arg->state & 3;
-		if (p1val) state |= 4;
-		if (p2val) state |= 8;
-		arg->state = (state >> 2);
-		switch (state) {
-			case 1: case 7: case 8: case 14:
-				arg->position++;
-				return;
-			case 2: case 4: case 11: case 13:
-				arg->position--;
-				return;
-			case 3: case 12:
-				arg->position += 2;
-				return;
-			case 6: case 9:
-				arg->position += 2;
-				return;
-		}
+        uint8_t p1val = DIRECT_PIN_READ(arg->pin1_register, arg->pin1_bitmask);
+        uint8_t p2val = DIRECT_PIN_READ(arg->pin2_register, arg->pin2_bitmask);
+        uint8_t state = arg->state & 3;
+        if (p1val) state |= 4;
+        if (p2val) state |= 8;
+        arg->state = (state >> 2);
+        switch (state) {
+            case 1: case 7: case 8: case 14:
+                arg->position++;
+                return;
+            case 2: case 4: case 11: case 13:
+                arg->position--;
+                return;
+            case 3: case 12:
+                arg->position += 2;
+                return;
+            case 6: case 9:
+                arg->position += 2;
+                return;
+        }
 #endif
+    }   // End of else...
 	}
 /*
 #if defined(__AVR__)
