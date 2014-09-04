@@ -781,7 +781,7 @@ class MiniDriver():
     #-----------------------------------------------------------------------------------------------
     def getPresetMotorSpeeds( self ):
         
-        batteryVoltage = self.getBatteryVoltage()
+        batteryVoltage = self.getBatteryVoltageReading().data
         maxAbsMotorSpeed = 0.0
         maxAbsTurnSpeed = 0.0
         

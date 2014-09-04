@@ -136,7 +136,7 @@ class ConnectionHandler( sockjs.tornado.SockJSConnection ):
                     if robot != None:
                         statusDict = robot.getStatusDict()
                     
-                    self.send( json.dumps( statusDict ) )
+                    self.send( json.dumps( statusDict, default=lambda o: o.__dict__ ) )
                 
                 elif lineData[ 0 ] == "GetLogs":
                     
