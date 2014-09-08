@@ -116,6 +116,54 @@ class SensorConfiguration:
         self.configA5 = configA5
         self.leftEncoderType = leftEncoderType
         self.rightEncoderType = rightEncoderType
+
+    #-----------------------------------------------------------------------------------------------
+    @classmethod
+    def createFromDictionary( self, dictionary ):
+        
+        sensorConfiguration = SensorConfiguration()
+        
+        try:
+            if type( dictionary ) == dict:
+                if "configD12" in dictionary:
+                    value = str( dictionary[ "configD12" ] ).lower()
+                    
+                    if value == PIN_FUNC_DIGITAL_READ:
+                        sensorConfiguration.configD12 = PIN_FUNC_DIGITAL_READ
+                        
+                if "configD13" in dictionary:
+                    value = str( dictionary[ "configD13" ] ).lower()
+                    
+                    if value == PIN_FUNC_DIGITAL_READ:
+                        sensorConfiguration.configD13 = PIN_FUNC_DIGITAL_READ
+                
+                for i in range( 6 ):
+                    
+                    varName = "configA{0}".format( i )
+                    
+                    if varName in dictionary:
+                        value = str( dictionary[ varName ] ).lower()
+                        
+                        if value == PIN_FUNC_DIGITAL_READ:
+                            setattr( sensorConfiguration, varName, PIN_FUNC_DIGITAL_READ )
+                            
+                if "leftEncoderType" in dictionary:
+                    value = str( dictionary[ "leftEncoderType" ] ).lower()
+                    
+                    if value == ENCODER_TYPE_SINGLE_OUTPUT:
+                        sensorConfiguration.leftEncoderType = ENCODER_TYPE_SINGLE_OUTPUT
+                        
+                if "rightEncoderType" in dictionary:
+                    value = str( dictionary[ "rightEncoderType" ] ).lower()
+                    
+                    if value == ENCODER_TYPE_SINGLE_OUTPUT:
+                        sensorConfiguration.rightEncoderType = ENCODER_TYPE_SINGLE_OUTPUT
+                        
+        except Exception as e:
+            logging.error( "Caught exception when parsing Mini Driver SensorConfiguration dictionary" ) 
+            logging.error( str( e ) )
+            
+        return sensorConfiguration
         
     #-----------------------------------------------------------------------------------------------
     def setFromBytes( self, configByteA, configByteB ):

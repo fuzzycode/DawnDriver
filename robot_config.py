@@ -31,6 +31,7 @@
 import logging
 import os.path
 import json
+import mini_driver
 
 #--------------------------------------------------------------------------------------------------- 
 class RobotConfig:
@@ -54,6 +55,8 @@ class RobotConfig:
         self.customMaxAbsMotorSpeed = 50.0
         self.customMaxAbsTurnSpeed = 30.0
         self.leftMotorScale = 1.0
+        self.miniDriverSensorConfiguration = mini_driver.SensorConfiguration()
+        self.piSensorModuleName = "sensors.default_sensor_reader"
         
         self.tryToLoadConfigFile()
         
@@ -107,6 +110,13 @@ class RobotConfig:
         if "leftMotorScale" in configDict:
             self.leftMotorScale = self.parseDutyCycle( 
                 configDict[ "leftMotorScale" ] )
+                
+        if "miniDriverSensorConfiguration" in configDict:
+            self.miniDriverSensorConfiguration = mini_driver.SensorConfiguration.createFromDictionary( 
+                configDict[ "miniDriverSensorConfiguration" ] )
+                
+        if "piSensorModuleName" in configDict:
+            self.piSensorModuleName = str( configDict[ "piSensorModuleName" ] )
     
     #-----------------------------------------------------------------------------------------------
     def parsePulseWidth( self, inputData, defaultValue=MIN_PULSE_WIDTH ):
@@ -145,7 +155,7 @@ class RobotConfig:
             
         with open( absConfigFilename, "w" ) as configFile:
             
-            json.dump( configDict, configFile )
+            json.dump( configDict, configFile, indent=4, default=lambda o: o.__dict__ )
         
     #-----------------------------------------------------------------------------------------------
     def getConfigDict( self ):    
@@ -159,6 +169,8 @@ class RobotConfig:
             "customMaxAbsMotorSpeed" : self.customMaxAbsMotorSpeed,
             "customMaxAbsTurnSpeed" : self.customMaxAbsTurnSpeed,
             "leftMotorScale" : self.leftMotorScale,
+            "miniDriverSensorConfiguration" : self.miniDriverSensorConfiguration,
+            "piSensorModuleName" : self.piSensorModuleName,
         }
         
         return configDict

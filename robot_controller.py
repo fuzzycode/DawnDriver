@@ -44,6 +44,7 @@ class RobotController:
     
     MAX_UPDATE_TIME_DIFF = 0.25
     TIME_BETWEEN_SERVO_SETTING_UPDATES = 1.0
+    TIME_BETWEEN_SENSOR_CONFIGURATION_UPDATES = 0.5
     
     JOYSTICK_DEAD_ZONE = 0.1
     MAX_ABS_NECK_SPEED = 30.0   # Degrees per second
@@ -69,8 +70,14 @@ class RobotController:
         self.tiltSpeed = 0.0
         
         self.lastServoSettingsSendTime = 0.0
+        self.lastSensorConfigurationSendTime = 0.0
         self.lastUpdateTime = 0.0
         self.lastMotionCommandTime = time.time()
+        
+        self.piSensorModuleName = ""
+        self.piSensorModule = None
+        self.piSensorReader = None
+        self.piSensorDict = {}
     
     #-----------------------------------------------------------------------------------------------
     def __del__( self ):
@@ -91,7 +98,6 @@ class RobotController:
             "batteryVoltage" : self.miniDriver.getBatteryVoltageReading().data,
             "presetMaxAbsMotorSpeed" : presetMaxAbsMotorSpeed,
             "presetMaxAbsTurnSpeed" : presetMaxAbsTurnSpeed,
-            "miniDriverSensorConfig" : self.miniDriver.getSensorConfiguration(),
             "sensors" : self.getSensorDict()
         }
         
@@ -107,6 +113,8 @@ class RobotController:
             "ultrasonic" : self.miniDriver.getUltrasonicReading(),
             "encoders" : self.miniDriver.getEncodersReading(),
         }
+        
+        sensorDict.update( self.piSensorDict )
         
         return sensorDict
     
@@ -201,6 +209,48 @@ class RobotController:
         self.lastMotionCommandTime = time.time()
     
     #-----------------------------------------------------------------------------------------------
+    def _loadPiSensorModule( self ):
+        
+        if self.robotConfig.piSensorModuleName != "":
+            
+            # Try to import the new sensor module
+            newSensorModule = None
+            try:
+                
+                newSensorModule = __import__( self.robotConfig.piSensorModuleName, fromlist=[''] )
+                
+            except Exception as e:
+                logging.error( "Caught exception when trying to import Pi sensor module" )
+                logging.error( str( e ) )
+                
+            if newSensorModule != None:
+                
+                # We have a new sensor module. Shutdown any existing sensor reader
+                if self.piSensorReader != None:
+                    self.piSensorReader.shutdown()
+                    self.piSensorReader = None
+                    
+                # Remove reference to existing sensor module
+                self.piSensorModule = None
+                self.piSensorModuleName = ""
+                
+                # Try to create the new Pi sensor reader
+                newSensorReader = None
+                
+                try:
+                    
+                    newSensorReader = newSensorModule.PiSensorReader()
+                
+                except Exception as e:
+                    logging.error( "Caught exception when trying to create Pi sensor reader" )
+                    logging.error( str( e ) )
+                    
+                if newSensorReader != None:
+                    self.piSensorModule = newSensorModule
+                    self.piSensorModuleName = self.robotConfig.piSensorModuleName
+                    self.piSensorReader = newSensorReader
+    
+    #-----------------------------------------------------------------------------------------------
     def update( self ):
         
         if not self.miniDriver.isConnected():
@@ -240,5 +290,26 @@ class RobotController:
                 self.robotConfig.tiltPulseWidthMax )
  
             self.lastServoSettingsSendTime = curTime
+        
+        # Send sensor configuration if needed
+        if curTime - self.lastSensorConfigurationSendTime >= self.TIME_BETWEEN_SENSOR_CONFIGURATION_UPDATES:
             
+            self.miniDriver.setSensorConfiguration( self.robotConfig.miniDriverSensorConfiguration )
+ 
+            self.lastSensorConfigurationSendTime = curTime
+        
+        # Change the Pi sensor module if needed
+        if self.robotConfig.piSensorModuleName != self.piSensorModuleName:
+            self._loadPiSensorModule()
+        
+        # Read from any sensors attached to the Pi
+        if self.piSensorReader != None:
+            
+            self.piSensorDict = {}
+            try:
+                self.piSensorDict = self.piSensorReader.readSensors()
+            except Exception as e:
+                logging.error( "Caught exception when trying to read from Pi sensor reader" )
+                logging.error( str( e ) )
+        
         self.lastUpdateTime = curTime
