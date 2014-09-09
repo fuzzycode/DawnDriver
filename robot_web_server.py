@@ -112,7 +112,7 @@ class ConnectionHandler( sockjs.tornado.SockJSConnection ):
                     # Get the current configuration and return it
                     configDict = robotConfig.getConfigDict()
                     
-                    self.send( json.dumps( configDict, default=lambda o: o.__dict__ ) )
+                    self.send( json.dumps( configDict, default=lambda o: o.__dict__, separators=(',',':') ) )
                 
                 elif lineData[ 0 ] == "SetConfig" and len( lineData ) >= 2:
                     
@@ -136,16 +136,16 @@ class ConnectionHandler( sockjs.tornado.SockJSConnection ):
                     if robot != None:
                         statusDict = robot.getStatusDict()
                     
-                    self.send( json.dumps( statusDict, default=lambda o: o.__dict__ ) )
+                    self.send( json.dumps( statusDict, default=lambda o: o.__dict__, separators=(',',':') ) )
                 
                 elif lineData[ 0 ] == "GetServerTime":
                     
-                    self.send( json.dumps( { "serverTime" : time.time() }, default=lambda o: o.__dict__ ) )
+                    self.send( json.dumps( { "serverTime" : time.time() }, default=lambda o: o.__dict__, separators=(',',':') ) )
                 
                 elif lineData[ 0 ] == "GetLogs":
                     
                     # Return a dictionary containing the current logs
-                    self.send( json.dumps( self.getLogsDict(), default=lambda o: o.__dict__ ) )
+                    self.send( json.dumps( self.getLogsDict(), default=lambda o: o.__dict__, separators=(',',':') ) )
                 
                 elif lineData[ 0 ] == "Move" and len( lineData ) >= 3:
                     

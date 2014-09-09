@@ -180,3 +180,17 @@ class RobotConfig:
         
         self.readDataFromConfigDict( configDict )
         self.writeConfigFile()
+        
+    #-----------------------------------------------------------------------------------------------
+    def __str__( self ):
+        
+        return "panPulseWidthMin: {0}\n".format( self.panPulseWidthMin ) \
+            + "panPulseWidthMax: {0}\n".format( self.panPulseWidthMax ) \
+            + "tiltPulseWidthMin: {0}\n".format( self.tiltPulseWidthMin ) \
+            + "tiltPulseWidthMax: {0}\n".format( self.tiltPulseWidthMax ) \
+            + "usePresetMotorSpeeds: {0}\n".format( self.usePresetMotorSpeeds ) \
+            + "customMaxAbsMotorSpeed: {0}\n".format( self.customMaxAbsMotorSpeed ) \
+            + "customMaxAbsTurnSpeed: {0}\n".format( self.customMaxAbsTurnSpeed ) \
+            + "leftMotorScale: {0}\n".format( self.leftMotorScale ) \
+            + "miniDriverSensorConfiguration: {0}\n".format( self.miniDriverSensorConfiguration ) \
+            + "piSensorModuleName: {0}".format( self.piSensorModuleName )
