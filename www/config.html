@@ -86,7 +86,12 @@
         $(document).ready( function() { 
         
             drivingStraight = false;
-            webSocketURL = "http://" + window.location.hostname + "/robot_control";
+            webSocketPort = window.location.port;
+            if ( webSocketPort == "" )
+            {
+                webSocketPort = "80";
+            }
+            webSocketURL = "http://" + window.location.hostname + ":" + webSocketPort + "/robot_control";
             socket = new SockJS( webSocketURL );
             socket.onmessage = function( e ) {
                 //console.log('message', e.data);

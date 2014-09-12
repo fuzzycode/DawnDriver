@@ -102,8 +102,15 @@
     
         $(document).ready(function() { 
         
-             webSocketURL = "http://" + window.location.hostname + "/robot_control";
-             cameraURL = "http://" + window.location.hostname + ":8080/?action=stream";
+             webSocketPort = window.location.port;
+             if ( webSocketPort == "" )
+             {
+                webSocketPort = "80";
+             }
+             cameraPort = ( 8000 + parseInt( webSocketPort ) ).toString();
+             
+             webSocketURL = "http://" + window.location.hostname + ":" + webSocketPort + "/robot_control";
+             cameraURL = "http://" + window.location.hostname  + ":" + cameraPort + "/?action=stream";
              socket = new SockJS( webSocketURL );
              var shutdownComplete = false;
          
