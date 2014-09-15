@@ -28,6 +28,12 @@
 # OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE 
 # OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
+# To run this demo you first need to stop the robot web server (which will already
+# be talking to the Mini Driver). To do this run
+#
+# sudo service robot_web_server stop
+#
+
 import time
 import mini_driver
 import logging
