@@ -29,14 +29,16 @@
 import logging
 import os.path
 import re
-import serial
 import threading
 import time
 import Queue
 import struct
 
-import ino_uploader
+import serial
+
+import uploader
 import sensors
+
 
 MESSAGE_MARKER = chr( 0xFF ) + chr( 0xFF )
 COMMAND_ID_READ_DB_ENTRY = 1
@@ -683,7 +685,7 @@ class MiniDriver():
             if uploadIfInitialConnectionFails:
             
                 logging.info( "Unable to connect to correct firmware, uploading..." )
-                uploadResult = ino_uploader.upload( self.__getFirmwareDir(), 
+                uploadResult = uploader.upload( self.__getFirmwareDir(),
                     serialPortName=self.SERIAL_PORT_NAME, boardModel=self.BOARD_MODEL )
                 
                 if uploadResult == True:
