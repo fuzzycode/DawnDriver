@@ -31,6 +31,7 @@ import shutil
 import filecmp
 import subprocess
 import logging
+from distutils.spawn import find_executable
 
 #---------------------------------------------------------------------------------------------------
 class BoardInfo:
@@ -47,6 +48,9 @@ DEFAULT_SERIAL_PORT_NAME = "/dev/ttyUSB0"
 DEFAULT_BOARD_MODEL = "uno"
 BUILD_OUTPUT_FILENAME = "/tmp/ino_build_output.txt"
 
+INO_BUILDER = "ino"
+BIN_UPLOADER = "avrdude"
+
 BOARD_INFO_DICT = {
     "uno" : BoardInfo( "uno", "atmega328p", 115200 ),
     "atmega8" : BoardInfo( "atmega8", "atmega8", 19200 )
@@ -57,6 +61,14 @@ def getInoUploaderUserDir():
     
     homeDir = os.environ[ "HOME" ]
     return homeDir + "/.ino_uploader"
+
+#---------------------------------------------------------------------------------------------------
+def getInoBuilder():
+    return find_executable(INO_BUILDER)
+
+#---------------------------------------------------------------------------------------------------
+def getBinUploader():
+    return find_executable(BIN_UPLOADER)
 
 #---------------------------------------------------------------------------------------------------
 def upload( sketchDir, serialPortName=DEFAULT_SERIAL_PORT_NAME, 
@@ -117,7 +129,7 @@ def upload( sketchDir, serialPortName=DEFAULT_SERIAL_PORT_NAME,
     
     outputFile = open( BUILD_OUTPUT_FILENAME, "w" )
     buildResult = subprocess.call( 
-        [ "/usr/local/bin/ino", "build", "-m", boardModel ], cwd=inoUploaderSketchDir, 
+        [ getInoBuilder(), "build", "-m", boardModel ], cwd=inoUploaderSketchDir,
         stdout=outputFile, stderr=outputFile )
     outputFile.close()
     
@@ -128,7 +140,7 @@ def upload( sketchDir, serialPortName=DEFAULT_SERIAL_PORT_NAME,
         
         logging.debug( "Trying to upload " + hexFilename )
         
-        uploadResult = subprocess.call( [ "avrdude", 
+        uploadResult = subprocess.call( [ getBinUploader(),
             "-p", boardInfo.processor,
             "-P", serialPortName, "-c", "arduino", "-b", str( boardInfo.uploadSpeed ), 
             "-D", "-U", "flash:w:{0}:i".format( hexFilename ) ] )
