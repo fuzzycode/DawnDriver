@@ -638,7 +638,7 @@ class MiniDriver():
     
     SERIAL_PORT_NAME = "/dev/ttyUSB0"
     BAUD_RATE = 57600
-    FIRMWARE_MAIN_FILENAME = "mini_driver_firmware/mini_driver_firmware.ino"
+    FIRMWARE_MAIN_FILENAME = "firmware/src/driver.ino"
     BOARD_MODEL = "atmega8"
     
     EXPECTED_FIRMWARE_INFO = FirmwareInfo( 0xAC, 0xED, 0, 1 )
