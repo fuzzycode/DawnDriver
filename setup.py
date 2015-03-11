@@ -28,14 +28,14 @@
 # OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
 # OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
-"""
+__description__ =  """
 A stripped down version of the original Dagu Mini Driver from DawnRobotics. Only contains the actual driver
 code to communicate with the Dagu Mini Driver board.
 
 Added a setup.py file for easy installation and inclusion in other projects based on the driver.
 """
 
-from distutils.core import setup
+from setuptools import setup
 
 __version__=(1,0,0)
 
@@ -44,13 +44,13 @@ if __name__ == "__main__":
 
     setup(
         name="DawnDriver",
-        version=str(__version__),
+        version='.'.join([str(d) for d in __version__]),
         author="Alan Broun(Dawn Robotics)",
         author_email='abroun@alanbroun.net',
         maintainer="Bjoern Larsson",
         maintainer_email="develop@bjornlarsson.net",
         description='A Dagu Mini Driver',
-        long_description=__docs__,
+        long_description=__description__,
         url="",
         keywords="robotics firmware",
         install_requires=['ino'],

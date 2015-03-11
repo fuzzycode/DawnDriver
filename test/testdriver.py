@@ -37,16 +37,16 @@ import driver
 
 class TestDriver(TestCase):
     config = driver.SensorConfiguration(
-        configD12=mini_driver.PIN_FUNC_ULTRASONIC_READ,
-        configD13=mini_driver.PIN_FUNC_DIGITAL_READ,
-        configA0=mini_driver.PIN_FUNC_ANALOG_READ,
-        configA1=mini_driver.PIN_FUNC_ANALOG_READ,
-        configA2=mini_driver.PIN_FUNC_ANALOG_READ,
-        configA3=mini_driver.PIN_FUNC_DIGITAL_READ,
-        configA4=mini_driver.PIN_FUNC_ANALOG_READ,
-        configA5=mini_driver.PIN_FUNC_ANALOG_READ,
-        leftEncoderType=mini_driver.ENCODER_TYPE_QUADRATURE,
-        rightEncoderType=mini_driver.ENCODER_TYPE_QUADRATURE )
+        configD12=driver.PIN_FUNC_ULTRASONIC_READ,
+        configD13=driver.PIN_FUNC_DIGITAL_READ,
+        configA0=driver.PIN_FUNC_ANALOG_READ,
+        configA1=driver.PIN_FUNC_ANALOG_READ,
+        configA2=driver.PIN_FUNC_ANALOG_READ,
+        configA3=driver.PIN_FUNC_DIGITAL_READ,
+        configA4=driver.PIN_FUNC_ANALOG_READ,
+        configA5=driver.PIN_FUNC_ANALOG_READ,
+        leftEncoderType=driver.ENCODER_TYPE_QUADRATURE,
+        rightEncoderType=driver.ENCODER_TYPE_QUADRATURE )
 
     def setUp(self):
         self.driver = driver.MiniDriver()
