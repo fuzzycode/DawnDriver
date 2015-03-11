@@ -28,42 +28,42 @@
 # OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
 # OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
-"""
-A stripped down version of the original Dagu Mini Driver from DawnRobotics. Only contains the actual driver
-code to communicate with the Dagu Mini Driver board.
+import unittest
+from unittest import TestCase
+import time
 
-Added a setup.py file for easy installation and inclusion in other projects based on the driver.
-"""
+import driver
 
-from distutils.core import setup
 
-__version__=(1,0,0)
+class TestDriver(TestCase):
+    config = driver.SensorConfiguration(
+        configD12=mini_driver.PIN_FUNC_ULTRASONIC_READ,
+        configD13=mini_driver.PIN_FUNC_DIGITAL_READ,
+        configA0=mini_driver.PIN_FUNC_ANALOG_READ,
+        configA1=mini_driver.PIN_FUNC_ANALOG_READ,
+        configA2=mini_driver.PIN_FUNC_ANALOG_READ,
+        configA3=mini_driver.PIN_FUNC_DIGITAL_READ,
+        configA4=mini_driver.PIN_FUNC_ANALOG_READ,
+        configA5=mini_driver.PIN_FUNC_ANALOG_READ,
+        leftEncoderType=mini_driver.ENCODER_TYPE_QUADRATURE,
+        rightEncoderType=mini_driver.ENCODER_TYPE_QUADRATURE )
 
+    def setUp(self):
+        self.driver = driver.MiniDriver()
+
+    def tearDown(self):
+        pass
+
+    def test_sensors(self):
+        connected = self.driver.connect()
+        self.assertTrue(connected, "Connection should be successful")
+
+        self.driver.setSensorConfiguration(self.config)
+
+        for i in range(0, 10):
+            self.driver.update()
+
+            time.sleep(0.1)
 
 if __name__ == "__main__":
-
-    setup(
-        name="DawnDriver",
-        version=str(__version__),
-        author="Alan Broun(Dawn Robotics)",
-        author_email='abroun@alanbroun.net',
-        maintainer="Bjoern Larsson",
-        maintainer_email="develop@bjornlarsson.net",
-        description='A Dagu Mini Driver',
-        long_description=__docs__,
-        url="",
-        keywords="robotics firmware",
-        install_requires=['ino'],
-        test_suite='test',
-        classifiers=[f.strip() for f in """
-        Development Status :: 4 - Beta
-        Intended Audience :: Developers
-        Operating System :: POSIX :: Linux
-        Programming Language :: Python
-        Topic :: Software Development :: Libraries :: Python Modules
-        Topic :: Utilities""".splitlines() if f.strip()],
-
-        packages=['firmware'],
-        package_dir={'firmware': 'firmware/'},
-        package_data={'firmware': ['firmware/*']}
-    )
+    sys.exit(unittest.main())
