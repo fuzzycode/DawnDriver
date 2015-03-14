@@ -52,7 +52,7 @@ class TestDriver(TestCase):
         self.driver = driver.MiniDriver()
 
     def tearDown(self):
-        pass
+        del self.driver
 
     def test_sensors(self):
         connected = self.driver.connect()
