@@ -63,6 +63,16 @@ class TestDriver(TestCase):
         for i in range(0, 10):
             self.driver.update()
 
+            analog = self.driver.getAnalogReadings()
+            digital = self.driver.getDigitalReadings()
+            encoders = self.driver.getEncodersReading()
+            ultrasound = self.driver.getUltrasonicReading()
+
+            self.assertIsNotNone(analog)
+            self.assertIsNotNone(digital)
+            self.assertIsNotNone(encoders)
+            self.assertIsNotNone(ultrasound)
+
             time.sleep(0.1)
 
 if __name__ == "__main__":
